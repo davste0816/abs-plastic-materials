@@ -17,25 +17,26 @@
 
 # System imports
 import bpy
+from bpy.types import Panel
 from bpy.props import *
 
 # updater import
 from .app_handlers import *
 from .. import addon_updater_ops
 
-class ABSPlasticMaterialsPanel(bpy.types.Panel):
+class BRICKER_PT_abs_plastic(Panel):
     bl_space_type  = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context     = "material"
     bl_label       = "ABS Plastic Materials"
-    bl_idname      = "PROPERTIES_ABS_Plastic_Materials_append_materials"
+    bl_idname      = "BRICKER_PT_abs_plastic"
     # bl_category    = "ABS Plastic Materials"
-    # COMPAT_ENGINES = {"CYCLES"}
+    # COMPAT_ENGINES = {"CYCLES", "BLENDER_EEVEE"}
 
     # @classmethod
     # def poll(cls, context):
-    #     """ Only renders UI if cycles render engine is used """
-    #     return bpy.context.scene.render.engine == 'CYCLES'
+    #     """ ensures operator can execute (if not, returns false) """
+    #     return True
 
     def draw(self, context):
         layout = self.layout
@@ -50,10 +51,10 @@ class ABSPlasticMaterialsPanel(bpy.types.Panel):
 
         col = layout.column(align=True)
         row = col.row(align=True)
-        if bpy.context.scene.render.engine == 'CYCLES':
-            row.operator("scene.append_abs_plastic_materials", text="Import ABS Plastic Materials", icon="IMPORT")
+        if bpy.context.scene.render.engine in ("CYCLES", "BLENDER_EEVEE"):
+            row.operator("abs.append_materials", text="Import ABS Plastic Materials", icon="IMPORT")
         else:
-            row.label("Switch to 'Cycles Render' engine")
+            row.label(text="Switch to 'Cycles' or 'Eevee' render engine")
         # import settings
         col = layout.column(align=True)
         row = col.row(align=True)
@@ -63,7 +64,7 @@ class ABSPlasticMaterialsPanel(bpy.types.Panel):
 
         # material settings
         col = layout.column(align=True)
-        col.label("Properties:")
+        col.label(text="Properties:")
         row = col.row(align=True)
         row.prop(scn, "abs_subsurf")
         row = col.row(align=True)
@@ -73,7 +74,7 @@ class ABSPlasticMaterialsPanel(bpy.types.Panel):
 
 
         row = col.row(align=True)
-        row.label("UV Details:")
+        row.label(text="UV Details:")
         row = col.row(align=True)
         row.prop(scn, "uv_detail_quality", text="Quality")
         row = col.row(align=True)

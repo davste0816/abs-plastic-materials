@@ -18,6 +18,7 @@
 # system imports
 import bpy
 import os
+import time
 
 from ..functions import *
 from ..colors import *
@@ -30,34 +31,38 @@ def appendFrom(directory, filename):
         directory=directory)
 
 
-class appendABSPlasticMaterials(bpy.types.Operator):
-    """Append ABS Plastic Materials from external blender file"""                      # blender will use this as a tooltip for menu items and buttons.
-    bl_idname = "scene.append_abs_plastic_materials"                                   # unique identifier for buttons and menu items to reference.
-    bl_label = "Append ABS Plastic Materials"                                          # display name in the interface.
+class ABS_OT_append_materials(bpy.types.Operator):
+    """Append ABS Plastic Materials from external blender file"""               # blender will use this as a tooltip for menu items and buttons.
+    bl_idname = "abs.append_materials"                                          # unique identifier for buttons and menu items to reference.
+    bl_label = "Append ABS Plastic Materials"                                   # display name in the interface.
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
     def poll(self, context):
-        return context.scene.render.engine == 'CYCLES'
+        return context.scene.render.engine in ("CYCLES", "BLENDER_EEVEE")
 
     def execute(self, context):
         scn = context.scene
+
+        ct = time.time()
+        # list of materials to append from 'abs_plastic_materials.blend'
+        mat_names = getMatNames()
+        alreadyImported = [mn for mn in mat_names if bpy.data.materials.get(mn) is not None]
+        matsToReplace = []
+        failed = []
+        ct = stopWatch(1, ct, 6)
+
+        # if len(alreadyImported) == len(mat_names)
 
         # define file paths
         # addonsPath = bpy.utils.user_resource('SCRIPTS', "addons")
         addonPath = os.path.dirname(os.path.abspath(__file__))[:-8]
         blendfile = "%(addonPath)s/abs_plastic_materials.blend" % locals()
         section   = "/Material/"
-        directory  = blendfile + section
+        directory = blendfile + section
 
-        # list of materials to append from 'abs_plastic_materials.blend'
-        mat_names = getMatNames()
-        alreadyImported = []
-        matsToReplace = []
-        failed = []
-
-        imagesToReplace = ["ABS Fingerprints and Dust"]
-        nodeGroupsToReplace = ["ABS_Absorbtion", "ABS_Basic Noise", "ABS_Bump", "ABS_Dialectric", "ABS_Fingerprint", "ABS_Fresnel", "ABS_GlassAbsorption", "ABS_Parallel_Scratches", "ABS_PBR Glass", "ABS_Random Value", "ABS_Randomize Color", "ABS_Reflection", "ABS_Scale", "ABS_Scratches", "ABS_Specular Map", "ABS_Transparent", "ABS_Uniform Scale", "Translate", "RotateZ", "RotateY", "RotateX", "RotateXYZ"]
+        imagesToReplace = ("ABS Fingerprints and Dust")
+        nodeGroupsToReplace = ("ABS_Absorbtion", "ABS_Basic Noise", "ABS_Bump", "ABS_Dialectric", "ABS_Dialectric 2", "ABS_Fingerprint", "ABS_Fresnel", "ABS_GlassAbsorption", "ABS_Parallel_Scratches", "ABS_PBR Glass", "ABS_Random Value", "ABS_Randomize Color", "ABS_Reflection", "ABS_Scale", "ABS_Scratches", "ABS_Specular Map", "ABS_Transparent", "ABS_Uniform Scale", "Translate", "RotateZ", "RotateY", "RotateX", "RotateXYZ")
 
         try:
             # set cm.brickMaterialsAreDirty for all models in Rebrickr, if it's installed
@@ -67,6 +72,8 @@ class appendABSPlasticMaterials(bpy.types.Operator):
         except AttributeError:
             pass
 
+        ct = stopWatch(2, ct, 6)
+
         # remove existing bump/specular maps
         for im in bpy.data.images:
             if im.name in imagesToReplace:
@@ -75,6 +82,7 @@ class appendABSPlasticMaterials(bpy.types.Operator):
         for ng in bpy.data.node_groups:
             if ng.name.startswith("ABS_") and ng.name[4:] in nodeGroupsToReplace:
                 bpy.data.node_groups.remove(ng)
+        ct = stopWatch(3, ct, 6)
 
         # get the current mode
         current_mode = str(bpy.context.mode)
@@ -87,6 +95,8 @@ class appendABSPlasticMaterials(bpy.types.Operator):
         # temporarily switch to object mode
         if current_mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
+
+        ct = stopWatch(4, ct, 6)
 
         for mat_name in mat_names:
             # if material exists, remove or skip
@@ -115,6 +125,8 @@ class appendABSPlasticMaterials(bpy.types.Operator):
             # new_mat = bpy.data.materials.get(m)
             # new_mat.use_fake_user = True
 
+        ct = stopWatch(5, ct, 6)
+
         # replace old material node trees
         for old_mat in matsToReplace:
             origName = old_mat.name.split("__")[0]
@@ -122,9 +134,13 @@ class appendABSPlasticMaterials(bpy.types.Operator):
             old_mat.user_remap(new_mat)
             bpy.data.materials.remove(old_mat)
 
+        ct = stopWatch(6, ct, 6)
+
         # switch back to last mode
         if current_mode != 'OBJECT':
             bpy.ops.object.mode_set(mode=current_mode)
+
+        ct = stopWatch(7, ct, 6)
 
         # update subsurf/reflection amounts
         update_abs_subsurf(self, bpy.context)
@@ -133,6 +149,8 @@ class appendABSPlasticMaterials(bpy.types.Operator):
         update_abs_fingerprints(self, context)
         update_abs_displace(self, bpy.context)
         toggle_save_datablocks(self, bpy.context)
+
+        ct = stopWatch(8, ct, 6)
 
         # remap bump/specular to one im
         for mapName in imagesToReplace:
@@ -166,6 +184,8 @@ class appendABSPlasticMaterials(bpy.types.Operator):
                     bpy.data.node_groups.remove(g)
             if firstGroup is not None:
                 firstGroup.name = groupName
+
+        ct = stopWatch(9, ct, 6)
 
         # report status
         if len(alreadyImported) == len(mat_names):

@@ -15,12 +15,16 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# System imports
+import time
+
 # Blender imports
 import bpy
 from bpy.props import *
 
 # Addon imports
 # NONE!
+
 
 def getMatNames(all=False):
     scn = bpy.context.scene
@@ -158,6 +162,7 @@ def update_image(self, context):
     for img_node in (imageNode1, imageNode2):
         img_node.image = resizedImg
 
+
 def getDetailImage(res, full_img):
     # create smaller fingerprints/dust images
     newImgName = "ABS Fingerprints and Dust" if res == 1 else "ABS Fingerprints and Dust (%(res)s)" % locals()
@@ -168,8 +173,30 @@ def getDetailImage(res, full_img):
         detail_img_scaled.scale(newScale, newScale)
     return detail_img_scaled
 
+
 def duplicateImage(img, name):
     width, height = img.size
     newImage = bpy.data.images.new(name, width, height)
     newImage.pixels = img.pixels[:]
     return newImage
+
+
+def stopWatch(text, lastTime, precision=5):
+    """From seconds to Days;Hours:Minutes;Seconds"""
+    value = time.time()-lastTime
+
+    valueD = (((value/365)/24)/60)
+    Days = int(valueD)
+
+    valueH = (valueD-Days)*365
+    Hours = int(valueH)
+
+    valueM = (valueH - Hours)*24
+    Minutes = int(valueM)
+
+    valueS = (valueM - Minutes)*60
+    Seconds = round(valueS, precision)
+
+    outputString = str(text) + ": " + str(Days) + ";" + str(Hours) + ":" + str(Minutes) + ";" + str(Seconds)
+    print(outputString)
+    return time.time()

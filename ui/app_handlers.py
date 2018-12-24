@@ -21,7 +21,6 @@
 # Blender imports
 import bpy
 from bpy.app.handlers import persistent
-from mathutils import Vector, Euler
 
 # Addon imports
 # NONE!

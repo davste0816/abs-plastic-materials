@@ -19,7 +19,7 @@ bl_info = {
     "name"        : "ABS Plastic Materials",
     "author"      : "Christopher Gearhart <chris@bblanimation.com>",
     "version"     : (2, 0, 0),
-    "blender"     : (2, 79, 0),
+    "blender"     : (2, 80, 0),
     "description" : "Append ABS Plastic Materials to current blender file with a simple click",
     "location"    : "PROPERTIES > Materials > ABS Plastic Materials",
     "warning"     : "",  # used for warning icon and text in addons panel
@@ -30,6 +30,8 @@ bl_info = {
 # Blender imports
 import bpy
 from bpy.props import *
+from bpy.types import Scene
+from bpy.utils import register_class, unregister_class
 props = bpy.props
 
 # Addon imports
@@ -37,12 +39,14 @@ from .ui import *
 from .buttons import *
 from .lib import *
 from .functions import *
+from .lib import preferences, classesToRegister
 
 # updater import
 from . import addon_updater_ops
 
 def register():
-    bpy.utils.register_module(__name__)
+    for cls in classesToRegister.classes:
+        bpy.utils.register_class(cls)
 
     bpy.props.abs_plastic_materials_module_name = __name__
 
@@ -98,84 +102,92 @@ def register():
         'ABS Plastic Silver',
         'ABS Plastic Teal']
 
-    bpy.types.Scene.abs_subsurf = FloatProperty(
+    Scene.abs_subsurf = FloatProperty(
         name="Subsurface Scattering",
         description="Amount of subsurface scattering for ABS Plastic Materials (higher values up to 1 are more accurate, but increase render times)",
         min=0, max=10,
         update=update_abs_subsurf,
         default=1)
-    bpy.types.Scene.abs_reflect = FloatProperty(
+    Scene.abs_reflect = FloatProperty(
         name="Reflection",
         description="Amount of reflection for ABS Plastic Materials",
         min=0, max=100,
         update=update_abs_reflect,
         default=1)
-    bpy.types.Scene.abs_randomize = FloatProperty(
+    Scene.abs_randomize = FloatProperty(
         name="Randomize",
         description="Amount of per-object randomness for ABS Plastic Material colors",
         min=0, max=1,
         update=update_abs_randomize,
         default=0.02)
-    bpy.types.Scene.abs_fingerprints = FloatProperty(
+    Scene.abs_fingerprints = FloatProperty(
         name="Fingerprints",
         description="Amount of fingerprints and dust to add to the specular map of the ABS Plastic Materials (mesh must be unwrapped)",
         min=0, max=1,
         update=update_abs_fingerprints,
         default=0.25)
-    bpy.types.Scene.abs_displace = FloatProperty(
+    Scene.abs_displace = FloatProperty(
         name="Displacement",
         description="Bumpiness of the ABS Plastic Materials (mesh must be unwrapped)",
         min=0, max=100,
         update=update_abs_displace,
         default=0)
-    bpy.types.Scene.uv_detail_quality = FloatProperty(
+    Scene.uv_detail_quality = FloatProperty(
         name="UV Detail Quality",
         description="Quality of the fingerprints and dust detailing (save memory by reducing quality)",
         min=0, max=1,
         precision=1,
         update=update_image,
         default=1)
-    # bpy.types.Scene.abs_uv_scale = FloatProperty(
+    # Scene.abs_uv_scale = FloatProperty(
     #     name="UV Scale",
     #     description="Update the universal scale of the ",
     #     min=0,
     #     update=update_abs_uv_scale,
     #     default=1)
-    bpy.types.Scene.save_datablocks = BoolProperty(
+    Scene.save_datablocks = BoolProperty(
         name="Save Data-Blocks",
         description="Save ABS Plastic Materials even if they have no users",
         update=toggle_save_datablocks,
         default=True)
-    bpy.types.Scene.include_transparent = BoolProperty(
+    Scene.include_transparent = BoolProperty(
         name="Include Transparent Colors",
         description="Import transparent colors",
         default=False)
-    bpy.types.Scene.include_uncommon = BoolProperty(
+    Scene.include_uncommon = BoolProperty(
         name="Include Uncommon Colors",
         description="Save ABS Plastic Materials even if they have no users",
         default=False)
 
     # Add attribute for Bricker addon
-    bpy.types.Scene.isBrickMaterialsInstalled = BoolProperty(default=True)
+    Scene.isBrickMaterialsInstalled = BoolProperty(default=True)
 
     # addon updater code and configurations
     addon_updater_ops.register(bl_info)
 
 
 def unregister():
-    Scn = bpy.types.Scene
 
     # addon updater unregister
     addon_updater_ops.unregister()
 
-    del Scn.isBrickMaterialsInstalled
-    del Scn.abs_subsurf
+    del Scene.isBrickMaterialsInstalled
+    del Scene.include_uncommon
+    del Scene.include_transparent
+    del Scene.save_datablocks
+    del Scene.uv_detail_quality
+    del Scene.abs_displace
+    del Scene.abs_fingerprints
+    del Scene.abs_randomize
+    del Scene.abs_reflect
+    del Scene.abs_subsurf
     del bpy.props.abs_mats_uncommon
     del bpy.props.abs_mats_transparent
     del bpy.props.abs_mats_common
     del bpy.props.abs_plastic_materials_module_name
 
-    bpy.utils.unregister_module(__name__)
+    for cls in reversed(classesToRegister.classes):
+        bpy.utils.unregister_class(cls)
 
 
 if __name__ == "__main__":
