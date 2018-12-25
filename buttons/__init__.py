@@ -15,13 +15,19 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# system imports
+# System imports
 import bpy
 import os
 import time
+from mathutils import Matrix, Vector
 
+# Blender imports
+# NONE!
+
+# Addon imports
 from ..functions import *
 from ..colors import *
+from ..lib.mat_properties import mat_properties
 
 def appendFrom(directory, filename):
     filepath = directory + filename
@@ -42,37 +48,28 @@ class ABS_OT_append_materials(bpy.types.Operator):
         return context.scene.render.engine in ("CYCLES", "BLENDER_EEVEE")
 
     def execute(self, context):
+        # initialize variables
         scn = context.scene
-
-        ct = time.time()
-        # list of materials to append from 'abs_plastic_materials.blend'
-        mat_names = getMatNames()
+        mat_names = getMatNames()  # list of materials to append from 'abs_plastic_materials.blend'
         alreadyImported = [mn for mn in mat_names if bpy.data.materials.get(mn) is not None]
         matsToReplace = []
         failed = []
-        ct = stopWatch(1, ct, 6)
-
-        # if len(alreadyImported) == len(mat_names)
 
         # define file paths
         # addonsPath = bpy.utils.user_resource('SCRIPTS', "addons")
         addonPath = os.path.dirname(os.path.abspath(__file__))[:-8]
         blendfile = "%(addonPath)s/abs_plastic_materials.blend" % locals()
-        section   = "/Material/"
-        directory = blendfile + section
+        nodeDirectory = "%(blendfile)s/NodeTree/" % locals()
+        imDirectory = "%(blendfile)s/Image/" % locals()
 
         imagesToReplace = ("ABS Fingerprints and Dust")
         nodeGroupsToReplace = ("ABS_Absorbtion", "ABS_Basic Noise", "ABS_Bump", "ABS_Dialectric", "ABS_Dialectric 2", "ABS_Fingerprint", "ABS_Fresnel", "ABS_GlassAbsorption", "ABS_Parallel_Scratches", "ABS_PBR Glass", "ABS_Random Value", "ABS_Randomize Color", "ABS_Reflection", "ABS_Scale", "ABS_Scratches", "ABS_Specular Map", "ABS_Transparent", "ABS_Uniform Scale", "Translate", "RotateZ", "RotateY", "RotateX", "RotateXYZ")
 
-        try:
-            # set cm.brickMaterialsAreDirty for all models in Rebrickr, if it's installed
+        # set cm.brickMaterialsAreDirty for all models in Bricker, if it's installed
+        if hasattr(scn, "cmlist"):
             for cm in scn.cmlist:
                 if cm.materialType == "Random":
                     cm.brickMaterialsAreDirty = True
-        except AttributeError:
-            pass
-
-        ct = stopWatch(2, ct, 6)
 
         # remove existing bump/specular maps
         for im in bpy.data.images:
@@ -82,36 +79,71 @@ class ABS_OT_append_materials(bpy.types.Operator):
         for ng in bpy.data.node_groups:
             if ng.name.startswith("ABS_") and ng.name[4:] in nodeGroupsToReplace:
                 bpy.data.node_groups.remove(ng)
-        ct = stopWatch(3, ct, 6)
-
-        # get the current mode
-        current_mode = str(bpy.context.mode)
-        # Rename current mode if one of these (for some reason Blender calls them two different things in object.mode_set and context.mode!)
-        if current_mode == 'EDIT_MESH': current_mode = 'EDIT'
-        if current_mode == 'PAINT_VERTEX': current_mode = 'VERTEX_PAINT'
-        if current_mode == 'PAINT_TEXTURE': current_mode = 'TEXTURE_PAINT'
-        if current_mode == 'PAINT_WEIGHT': current_mode = 'WEIGHT_PAINT'
 
         # temporarily switch to object mode
-        if current_mode != 'OBJECT':
-            bpy.ops.object.mode_set(mode='OBJECT')
+        current_mode = str(bpy.context.mode)
+        if current_mode == "EDIT_MESH":
+            bpy.ops.object.mode_set(mode="OBJECT")
 
-        ct = stopWatch(4, ct, 6)
+        # append node groups from nodeDirectory
+        group_names = ("ABS_Bump", "ABS_Dialectric", "ABS_Transparent", "ABS_Uniform Scale")
+        for gn in group_names:
+            appendFrom(nodeDirectory, filename=gn)
+        # append fingerprints and dust image from imDirectory
+        appendFrom(imDirectory, filename="ABS Fingerprints and Dust")
 
         for mat_name in mat_names:
             # if material exists, remove or skip
             m = bpy.data.materials.get(mat_name)
             if m is not None:
                 # mark material to replace
-                m = bpy.data.materials.get(mat_name)
                 m.name = m.name + "__replaced"
                 matsToReplace.append(m)
 
             # get the current length of bpy.data.materials
             last_len_mats = len(bpy.data.materials)
 
-            # append material from directory
-            appendFrom(directory, filename=mat_name)
+            # create new material
+            m = bpy.data.materials.new(mat_name)
+            m.use_nodes = True
+
+            # create/get all necessary nodes
+            nodes = m.node_tree.nodes
+            nodes.remove(nodes.get("Principled BSDF"))
+            n_shader = nodes.new("ShaderNodeGroup")
+            if mat_name.startswith("ABS Plastic Trans-"):
+                n_shader.node_tree = bpy.data.node_groups.get("ABS_Transparent")
+            else:
+                n_shader.node_tree = bpy.data.node_groups.get("ABS_Dialectric")
+            n_bump = nodes.new("ShaderNodeGroup")
+            n_bump.node_tree = bpy.data.node_groups.get("ABS_Bump")
+            n_scale = nodes.new("ShaderNodeGroup")
+            n_scale.node_tree = bpy.data.node_groups.get("ABS_Uniform Scale")
+            n_displace = nodes.new("ShaderNodeDisplacement")
+            n_uv = nodes.new("ShaderNodeUVMap")
+            n_output = nodes.get("Material Output")
+
+            # connect the nodes together
+            links = m.node_tree.links
+            links.new(n_shader.outputs["Shader"], n_output.inputs["Surface"])
+            links.new(n_displace.outputs["Displacement"], n_output.inputs["Displacement"])
+            links.new(n_bump.outputs["Color"], n_displace.inputs["Height"])
+            links.new(n_uv.outputs["UV"], n_scale.inputs["Vector"])
+            links.new(n_scale.outputs["Vector"], n_shader.inputs["Vector"])
+            links.new(n_scale.outputs["Vector"], n_bump.inputs["Vector"])
+
+            # position the nodes in 2D space
+            starting_loc = n_output.location
+            n_shader.location = n_output.location - Vector((400, -250))
+            n_bump.location = n_output.location - Vector((400, 200))
+            n_displace.location = n_output.location - Vector((200, 200))
+            n_scale.location = n_output.location - Vector((600, 200))
+            n_uv.location = n_output.location - Vector((800, 200))
+
+            # set properties
+            if mat_name in mat_properties.keys():
+                for k in mat_properties[mat_name].keys():
+                    n_shader.inputs[k].default_value = mat_properties[mat_name][k]
 
             # get compare last length of bpy.data.materials to current (if the same, material not imported)
             if len(bpy.data.materials) == last_len_mats:
@@ -121,12 +153,6 @@ class ABS_OT_append_materials(bpy.types.Operator):
                 failed.append(mat_name)
                 continue
 
-            # # ensure material saves to blender file
-            # new_mat = bpy.data.materials.get(m)
-            # new_mat.use_fake_user = True
-
-        ct = stopWatch(5, ct, 6)
-
         # replace old material node trees
         for old_mat in matsToReplace:
             origName = old_mat.name.split("__")[0]
@@ -134,13 +160,9 @@ class ABS_OT_append_materials(bpy.types.Operator):
             old_mat.user_remap(new_mat)
             bpy.data.materials.remove(old_mat)
 
-        ct = stopWatch(6, ct, 6)
-
         # switch back to last mode
-        if current_mode != 'OBJECT':
-            bpy.ops.object.mode_set(mode=current_mode)
-
-        ct = stopWatch(7, ct, 6)
+        if current_mode == "EDIT_MESH":
+            bpy.ops.object.mode_set(mode="EDIT")
 
         # update subsurf/reflection amounts
         update_abs_subsurf(self, bpy.context)
@@ -149,25 +171,6 @@ class ABS_OT_append_materials(bpy.types.Operator):
         update_abs_fingerprints(self, context)
         update_abs_displace(self, bpy.context)
         toggle_save_datablocks(self, bpy.context)
-
-        ct = stopWatch(8, ct, 6)
-
-        # remap bump/specular to one im
-        for mapName in imagesToReplace:
-            firstIm = None
-            for im in bpy.data.images:
-                if im is None:
-                    continue
-                if im.name.startswith(mapName):
-                    if im.users == 0:
-                        bpy.data.images.remove(im)
-                    elif firstIm is None:
-                        firstIm = im
-                    else:
-                        im.user_remap(firstIm)
-                        bpy.data.images.remove(im)
-            if firstIm is not None:
-                firstIm.name = mapName
 
         # remap node groups to one group
         for groupName in nodeGroupsToReplace:
@@ -184,8 +187,6 @@ class ABS_OT_append_materials(bpy.types.Operator):
                     bpy.data.node_groups.remove(g)
             if firstGroup is not None:
                 firstGroup.name = groupName
-
-        ct = stopWatch(9, ct, 6)
 
         # report status
         if len(alreadyImported) == len(mat_names):
